@@ -134,16 +134,16 @@ specular = F0 * specular;
 ### 脸
 
 ### 头发
-GF2 头发采用NPR渲染，分为**前发**和**后发**分开渲染，光照计算上二者基本相同。其中，**环境光（漫反射、高光）部分头发与衣服、丝袜计算基本一致，主要差异在直接光部分**。
+GF2 头发采用 NPR 渲染，分为**前发**和**后发**两个部分，在光照计算上二者相同。  
+其中，头发的**直接光漫反射，环境光（漫反射、高光）部分与衣服、丝袜计算基本一致，主要差异在直接光高光部分**。
 | 基础色贴图 | 高光贴图(_MatCapMap) | Ramp贴图 |
 |------|------|------|
 |<img width="256" height="256" alt="c_CheetaSR01_slg_hair_d" src="https://github.com/user-attachments/assets/72a2c68e-39f5-42d8-9741-211927b89afa" /> |<img width="256" height="256" alt="c_CheetaSR01_slg_hair_spc" src="https://github.com/user-attachments/assets/5e743dee-0552-44f7-9795-32b01cebda88" /> | <img width="256" height="16" alt="RampMap_Linear_RGBAHalf (4)" src="https://github.com/user-attachments/assets/226eaa9f-4dac-452c-b0df-c867c509f070" /> |   
   
-头发制作了两套UV，其中，UV0采样基础色贴图，UV1采样高光贴图。  
-1. **直接光漫反射**：NdotL * shadow 采样 Ramp 第一行。
-2. **直接光高光**：高光贴图的RGB通道存储前后发的高光分布，A通道存储高光遮罩。用UV1采样高光贴图，并基于视角方向对 UV 进行偏移，模拟头发反光随视角的动态变化。
+头发模型制作了两套 UV，用 UV0 采样基础色贴图，UV1 采样高光贴图。  
+1. **直接光高光**：高光贴图的RGB通道存储前后发的高光分布，A通道存储高光遮罩。**基于视角方向对采样 UV 进行偏移，模拟头发反光随视角的动态变化**。
 ```hlsl
-// UV1采样，模拟头发各向异性高光随视角滑动
+// 基于视角方向对采样 UV 偏移，模拟头发各向异性高光随视角上下滑动
 float2 matcapUV;
 matcapUV.x = input.uv01.z;
 matcapUV.y = input.uv01.w - viewDirWS.y * _MatCapUVOffset;
@@ -157,10 +157,13 @@ float3 matcapContrib = matcapSpec * (0.1 + 0.9 * (NdotL * shadow)) / PI;
 **（补充图片）**
 
 ### 眼睛（眼球、眼部高光、眼部压暗）  
-GF2 的眼睛由**三个独立材质层**叠加实现，可以分开独立调节：  
+GF2 的眼睛由**三个独立材质层**叠加实现，可以分开独立调节： 
+| 眼球贴图 | 眼部压暗/高光贴图 |
+|------|------|
 1. **眼球材质**：根据 View 方向做轻微 UV 偏移，模拟视差效果，增加眼球的立体感和灵动感。
 2. **眼部压暗**：Blend 模式`DstColor Zero`，在眼球上方叠加暗色增加深度感
 3. **眼部高光**：Blend 模式`One One`，叠加明亮的高光点
+
 **（补充图片）**
 
 ### 前发投影/前发半透
@@ -193,7 +196,7 @@ Varyings vert(Attributes v)
 
     float3 posWS = TransformObjectToWorld(v.positionOS.xyz);
 
-    // 光照方向偏移（模拟头发阴影投射）
+    // 基于光照方向偏移（模拟头发阴影投射）
     Light mainLight = GetMainLight();
     posWS.x += mainLight.direction.x * _HairShadowOffsetX;
     posWS.y += _HairShadowOffsetY;
@@ -234,7 +237,10 @@ Stencil
     FailFront Keep
     ZFailFront Keep
 }
+
+// 后续Pass计算跟前发基础光照绘制一致，输出半透
 ```
+**（补充图片）**
 ### 描边  
 描边使用基于法线外扩的经典描边方案，配合一些计算实现效果优化。  
 - **平滑法线**：顶点色 RGB 通道存储预计算的切线空间下平滑法线，解决硬边处法线突变导致的描边截断问题，A 通道存储描边遮罩，控制描边区域和粗细。
