@@ -58,7 +58,7 @@ directDiffuse = rampDiff.rgb;
 ```
 **（补充图片）**  
 2. **直接光高光（GGX BRDF + Ramp 调制）**：  
-- 先计算标准 GGX BRDF 三要素：**NDF（法线分布函数）、Smith G（几何遮蔽函数）、Fresnel（菲涅尔）**
+- 先计算标准 GGX BRDF 三要素：**NDF（法线分布函数）、Smith G（几何遮蔽函数）、Fresnel（菲涅尔）**。
 ```hlsl
 // GGX BRDF 计算
 // ── GGX NDF (D) ──
@@ -87,7 +87,7 @@ float pow4 = pow2 * pow2;
 float pow5 = oneMinusVdotH * pow4;                           
 float F_schlick = (saturate(F0.y * 50.0) - 1) * pow5 + 1.0;       
 ```
-- 再计算 **NDF_thin、Smith G_thin**，取 **saturate((NDF * G) / (NDF_thin * G_thin)) 的比值结果作为 Ramp 贴图的 U 坐标采样**
+- 再计算 **NDF_thin、Smith G_thin**，取 **saturate((NDF * G) / (NDF_thin * G_thin)) 的比值结果作为 Ramp 贴图的 U 坐标采样**。
 ```hlsl
 float LdotH = saturate(dot(mainLightDirection, halfDir));
 
@@ -133,7 +133,37 @@ specular = F0 * specular;
 ### 头发
 ### 眼睛（眼球、眼部高光、眼部压暗）
 ### 前发投影/前发半透
-### 描边
+### 描边  
+描边使用基于法线外扩的经典描边方案，配合一些计算实现效果优化。  
+- **平滑法线**：顶点色 RGB 通道存储预计算的切线空间下平滑法线，解决硬边处法线突变导致的描边截断问题，A 通道存储描边遮罩，控制描边区域和粗细。
+- **外扩流程**：转换到裁剪空间下实现描边外扩，实现屏幕宽高比矫正（避免描边在宽屏上被拉伸）和透视补偿（预乘 clip.w 抵消透视除法导致的近粗远细）。
+```hlsl
+// 模型顶点色RGB通道预存切线空间下平滑法线
+float3 vertColor = saturate(input.vertexColor.rgb) * 2.0 - 1.0;
+float3 smoothNormalOS = vertColor.x * tangentOS + vertColor.y * bitangentOS + vertColor.z * normalOS;
+smoothNormalOS = normalize(smoothNormalOS);
+ 
+float3 smoothNormalWS = TransformObjectToWorldNormal(smoothNormalOS);
+float3 csNormal = TransformWorldToHClipDir(smoothNormalWS);
+ 
+float aspect = _ScreenParams.x / _ScreenParams.y;
+csNormal.x /= aspect;
+csNormal = normalize(csNormal);
+ 
+float outlineWidth = _OutlineWidth * input.vertexColor.w * 0.001302;
+// 预乘 clip.w 抵消透视除法导致的近粗远细
+// 实际效果仍有近小远大的视觉感受，原因是相机拉远后角色占屏像素变小而描边像素不变，对比之下感觉描边变粗，补救方案：限制 w 的范围（clamp）
+float clampedW = clamp(output.positionCS.w, 1.0, _MaxOutlineDistance);
+output.positionCS.xy += csNormal.xy * outlineWidth * clampedW;
+
+// 使用世界空间顶点坐标点乘光照XZ方向，计算描边自身的亮暗面变化
+Light mainLight = GetMainLight();
+float2 lightDirXZ = normalize(mainLight.direction.xz);
+float2 posXZ = normalize(positionWS.xz);
+float dirDot = dot(posXZ, lightDirXZ);
+float blendFactor = dirDot * 0.5 + 0.5;
+float4 outlineColor = lerp(_OutlineShadowColor, _OutlineColor, blendFactor);
+```
 ### LUT
 
 ## 后续迭代
