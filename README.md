@@ -8,7 +8,7 @@
 
 ## 方案总结
 GF2 的角色渲染核心思路是 **PBR + NPR 结合**。部分材质在保留物理正确的光照基础上，通过 Ramp 贴图、SDF 阴影等手段对视觉表现进行卡通化改造，兼顾质感真实与二次元风格。
-其中，衣服、丝袜等材质使用了结合Ramp的PBR光照算法，而脸、头发、眼睛等材质则使用了 NPR 的方式来渲染，充分还原二次元卡通渲染的特征。
+其中，衣服、丝袜等材质使用了结合 Ramp 的 PBR 光照算法，而脸、头发、眼睛等材质则使用了 NPR 的方式来渲染，充分还原二次元卡通渲染的特征。
 
 整体光照计算管线可以大致概括为以下四个阶段：
 
@@ -130,7 +130,13 @@ specular = F0 * specular;
 - Ramp 贴图控制边光的形态和过渡
 - 与 Unity 原生 IBL 的区别：Unity 菲涅尔全方向均匀，GF2 有选择性地增强背光侧的边光
 ### 丝袜  
-**丝袜材质**在**衣服材质**的PBR基础上有两处调整，分别是：**基于视角变化的直接光漫反射 + 各项异性高光**，其余阶段（环境漫反射、直接光漫反射、环境高光 IBL）与衣服材质完全一致。
+**丝袜材质**使用的贴图和**衣服材质**完全相同。同时在**衣服材质**的 PBR 计算基础上添加了**基于视角变化的直接光漫反射 + 各项异性高光**，其余阶段（环境漫反射、直接光漫反射、环境高光 IBL）与衣服材质完全一致。
+1. **基于视角变化的直接光漫反射**：漫反射颜色会随视角变化。在 F0 计算阶段引入视角依赖的颜色偏移。
+2. **各项异性高光（替代传统 GGX 各向同性高光）**：使用各向异性变体的 NDF，**产生沿法线方向拉伸的线状高光，视觉上呈现丝袜特有的细长高光条纹**。其中，G 项和 F 项仍与标准 GGX 相同。
+```hlsl
+
+```
+**（补充图片）**  
 
 ### 脸  
 GF2 脸部渲染采用 NPR 的 SDF 贴图方案。使用贴图如下：
@@ -149,9 +155,9 @@ GF2 头发采用 NPR 渲染，分为**前发**和**后发**两个部分，在光
 |<img width="256" height="256" alt="c_CheetaSR01_slg_hair_d" src="https://github.com/user-attachments/assets/72a2c68e-39f5-42d8-9741-211927b89afa" /> |<img width="256" height="256" alt="c_CheetaSR01_slg_hair_spc" src="https://github.com/user-attachments/assets/5e743dee-0552-44f7-9795-32b01cebda88" /> | <img width="256" height="16" alt="RampMap_Linear_RGBAHalf (4)" src="https://github.com/user-attachments/assets/226eaa9f-4dac-452c-b0df-c867c509f070" /> |   
   
 头发模型制作了两套 UV，用 UV0 采样基础色贴图，UV1 采样高光贴图。  
-1. **头发高光**：高光贴图的RGB通道存储前后发的高光分布，A通道存储高光遮罩。**基于视角方向对采样 UV 进行偏移，模拟头发反光随视角的动态变化**。
+1. **头发高光**：高光贴图的RGB通道存储前后发的高光分布，A通道存储高光遮罩。**基于视角方向对采样 UV 的 Y 向量进行偏移，模拟头发反光随视角的动态变化**。
 ```hlsl
-// 基于视角方向对采样 UV 偏移，模拟头发各向异性高光随视角上下滑动
+// 基于视角方向对采样 UV 的 Y 向量进行偏移，模拟头发各向异性高光随视角上下滑动
 float2 matcapUV;
 matcapUV.x = input.uv01.z;
 matcapUV.y = input.uv01.w - viewDirWS.y * _MatCapUVOffset;
@@ -273,7 +279,7 @@ float outlineWidth = _OutlineWidth * input.vertexColor.w * 0.001302;
 float clampedW = clamp(output.positionCS.w, 1.0, _MaxOutlineDistance);
 output.positionCS.xy += csNormal.xy * outlineWidth * clampedW;
 
-// 使用世界空间顶点坐标点乘光照XZ方向，计算描边自身的亮暗面变化
+// 使用世界空间顶点坐标点乘光照XZ方向，计算描边的亮暗面变化
 Light mainLight = GetMainLight();
 float2 lightDirXZ = normalize(mainLight.direction.xz);
 float2 posXZ = normalize(positionWS.xz);
@@ -283,7 +289,7 @@ float4 outlineColor = lerp(_OutlineShadowColor, _OutlineColor, blendFactor);
 ```
 **（补充图片）**
 ### LUT
-GF2 使用一张自定义的 LUT 图完成最终的色彩映射（**LUT 结合了 ColorGrading + Tonemapping**）。  
+GF2 使用一张自定义的 LUT 图完成最终的色彩映射（**LUT 图结合了 ColorGrading + Tonemapping**）。  
 | LUT 图 |
 |--------|
 |<img width="1024" height="32" alt="image" src="https://github.com/user-attachments/assets/b590c57f-9c31-4d41-89a9-074a54cfb41b" /> |  
