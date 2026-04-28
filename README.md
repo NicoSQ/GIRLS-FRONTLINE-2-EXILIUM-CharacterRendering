@@ -1,6 +1,6 @@
 ## 简介
 记录一下基于 Renderdoc 截帧学习少女前线2角色卡通渲染，拆解材质系统和光照模型，并在 Unity 中进行效果还原。  
-GF2 原生使用**延迟管线**渲染，本次还原基于快速复刻角色渲染效果，使用**前向管线**还原。
+GF2 原生使用**延迟管线**渲染。项目目的在于快速复刻角色渲染效果，使用 Unity 的前向管线进行还原。
 
 ## 最终效果
 全身展示
@@ -86,19 +86,22 @@ G = min(G * 0.5, 1.0);
 float oneMinusVdotH = max(1.0 - VdotH, 0.001);                                 
 float pow2 = oneMinusVdotH * oneMinusVdotH;            
 float pow4 = pow2 * pow2;                               
-float pow5 = oneMinusVdotH * pow4;                           
+float pow5 = oneMinusVdotH * pow4;
+// 对于 F0 >= 0.2 的物体，F_schlick 恒等于 1，有意削弱菲涅尔影响                        
 float F_schlick = (saturate(F0.y * 50.0) - 1) * pow5 + 1.0;       
 ```
 - 再计算 **NDF_thin、Smith G_thin**，取 **saturate((NDF * G) / (NDF_thin * G_thin)) 的比值结果作为 Ramp 贴图的 U 坐标采样**。
 ```hlsl
 float LdotH = saturate(dot(mainLightDirection, halfDir));
 
-// D_thin (roughness⁴ 版)，更锐利的NDF，效果仅取决于粗糙度
+// D_thin (roughness⁴ 版)，更锐利的NDF，效果仅取决于粗糙度，充当亮度缩放
+// D_thin 就是 D 项在 NdotH = 1 时的峰值，所以 D/D_thin 天然是归一化的 [0, 1] 值，等价于"当前像素的高光强度占峰值的比例"
 float roughSq4 = roughSq * roughSq;
 float D_thin = roughSq / roughSq4;
 D_thin = min(D_thin * D_thin, 2048.0);
 
 // G_thin (使用 VdotH & LdotH 代替 NdotV & NdotL)
+// 高光贡献显著的区域是 NdotH ≈ 1 的区域，此时 H ≈ N，VdotH ≈ NdotV，LdotH ≈ NdotL，G 和 G_thin 几乎相等
 float gThinV = VdotH * oneMinusRoughSq + roughSq;
 float gThinL = LdotH * oneMinusRoughSq + roughSq;
 float gThinDenom = VdotH * gThinL;
@@ -107,7 +110,7 @@ gThinDenom = max(gThinDenom, 0.0001);
 float G_thin = 1.0 / gThinDenom;
 G_thin = min(G_thin * 0.5, 1.0);
 
-// rampSpecU = D * G / (D_thin * G_thin)
+// 把高光分布归一化到 [0,1]，作为 Ramp UV 的 x 分量
 float rampSpecU = saturate((D * G) / (D_thin * G_thin));
 
 // Ramp 高光采样 (V=0.375)
@@ -115,6 +118,7 @@ float2 rampSpecUV = float2(rampSpecU, 0.375);
 float4 rampSpec = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, rampSpecUV);
 specular = D_thin * G_thin * F_schlick * rampSpec.rgb;
 
+// 避免 NPR 计算高光亮度过曝
 specular = max(specular, 0.0);                            
 specular = min(specular, 10.0);
 // 输出直接光高光                        
