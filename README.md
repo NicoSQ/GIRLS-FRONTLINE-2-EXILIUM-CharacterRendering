@@ -134,11 +134,10 @@ specular = clamp(0.0, 10.0, specular);
 // 输出直接光高光                        
 specular = F0 * specular;
 ```
-- **效果**：保留了 GGX 物理正确的高光形状，结合 Ramp 将物理高光"翻译"成美术可控的色阶过渡。
+- **效果**：保留了 GGX 物理正确的高光形状，结合 Ramp 将物理高光"翻译"成美术可控的色阶过渡（肩带、金属片、领带高光明显，GIF 录制有压缩）。
 
 <p align="center">
 <img width="457" height="253" alt="DirectSpecular" src="https://github.com/user-attachments/assets/c038221d-4fa0-408c-89f2-fd91d2320c8d" />  
-肩带，领带高光明显，GIF 录制有压缩
 </p>
 
 3. **环境漫反射**：使用 Unity SampleSH 采样球谐光照，加入 NormalizeSH 归一化处理。**目的在于把SH环境光的方向性去掉，只保留整体的平均亮度和色调**。
@@ -165,10 +164,10 @@ float3 shFinal = NormalizeSH(shRaw);
 // 环境漫反射 = diffuse * shFinal
 float3 ambientDiffuse = diffuse * shFinal;
 ```
+- 调节 Lighting 的 Environment Lighting 的 Ambient Color 得到不同环境光漫反射强度
 <p align="center">
 <img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/7b46ff7e-19c3-492e-b510-f8f8382d1c10" />
 <img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/a4b2dd07-9aad-4043-b148-05f7f94b9550" />  
-调节 Lighting 的 Environment Lighting 的 Ambient Color 得到不同环境光漫反射强度
 </p>
 
 4. **环境高光 IBL**：
@@ -228,7 +227,7 @@ iblColor = iblColor * envBRDF;
 
 https://github.com/user-attachments/assets/6e11a92f-7325-4d19-a0b3-eff16b910eae  
 
-<p align="center"> 衣服边缘，布偶熊玩偶边缘，裙子边缘比较明显随光照方向变化的环境光 IBL </p>
+<p align="center"> 领带、衣服边缘，布偶熊玩偶边缘，裙子边缘比较明显随光照方向变化的环境光 IBL </p>
 
 5. **最终颜色合成**：直接光漫反射 + 直接光高光反射 + 环境光漫反射 + 环境光 IBL + （额外光源直接光漫反射 + 额外光源直接光高光）
 ```hlsl
@@ -306,7 +305,13 @@ specular = clamp(specular, 0.0, 10.0);
 specular = F0 * specular;
 
 ```
+- 各项异性高光输出
 
+https://github.com/user-attachments/assets/0f2d181c-56f1-4928-83c7-7a53460e9f3e 
+
+- 丝袜颜色结合
+
+https://github.com/user-attachments/assets/497aa63c-2e91-4632-883f-f447b32fde0c 
 
 ### 脸  
 GF2 脸部渲染采用 NPR 的 SDF 贴图方案。使用贴图如下：
@@ -443,11 +448,12 @@ float specMask = maskA * maskB;
 faceSpec = faceSpec * faceSDF;  
 ```
 
-**（补充图片）**
+https://github.com/user-attachments/assets/d1841452-0f15-4473-960d-77c0917ce112
+
 
 3. **环境光（漫反射、高光）**：跟衣服计算基本一致。
 
-**（补充图片）**  
+https://github.com/user-attachments/assets/0e55d01f-942f-466a-b4d8-8d9d40b957ba
 
 ### 头发
 GF2 头发采用 NPR 渲染，分为**前发**和**后发**两个部分，在光照计算上二者相同。  
@@ -470,7 +476,9 @@ float3 matcapSpec = NdotV * matcapSamp.rgb * _MatCapIntensity;
 // 完全阴影区域保留 10% 的高光亮度，避免高光完全消失         
 float3 matcapContrib = matcapSpec * (0.1 + 0.9 * (NdotL * shadow)) / PI;
 ```
-**（补充图片）**
+
+https://github.com/user-attachments/assets/8f1b5e54-e98f-4297-b4ce-5b8f1add06bc
+
 
 ### 眼睛（眼球、眼部高光、眼部压暗）  
 GF2 的眼睛由**三个独立材质层**叠加实现，可以分开独立调节： 
@@ -481,7 +489,7 @@ GF2 的眼睛由**三个独立材质层**叠加实现，可以分开独立调节
 2. **眼部压暗**：Blend 模式`DstColor Zero`，在眼球上方叠加暗色增加深度感
 3. **眼部高光**：Blend 模式`One One`，叠加明亮的高光点
 
-**（补充图片）**
+https://github.com/user-attachments/assets/0c788cdf-79ec-42b4-bd52-e839994aad3c
 
 ### 前发投影/前发半透
 通过多 Pass 配合写入不同 Stencil 值实现**前发在脸上的投影和半透效果**。  
@@ -557,7 +565,15 @@ Stencil
 
 // 后续Pass计算跟前发基础光照绘制一致，输出半透
 ```
-**（补充图片）**
+
+- 刘海阴影（跟随光照方向轻微移动）
+
+https://github.com/user-attachments/assets/15ad762a-bedb-49cc-9a69-8f0dd47b9c20
+
+- 前发半透
+
+https://github.com/user-attachments/assets/aa391f04-b733-45f9-b706-f1a7442afaca
+
 ### 描边  
 描边使用基于法线外扩的经典描边方案，配合一些计算实现效果优化。  
 - **平滑法线**：顶点色 RGB 通道存储预计算的切线空间下平滑法线，解决硬边处法线突变导致的描边截断问题，A 通道存储描边遮罩，控制描边区域和粗细。
@@ -589,15 +605,17 @@ float dirDot = dot(posXZ, lightDirXZ);
 float blendFactor = dirDot * 0.5 + 0.5;
 float4 outlineColor = lerp(_OutlineShadowColor, _OutlineColor, blendFactor);
 ```
-**（补充图片）**
+
 ### LUT
 GF2 使用一张自定义的 LUT 图完成最终的色彩映射（**LUT 图结合了 ColorGrading + Tonemapping**）。  
 | LUT 图 |
 |--------|
 |<img width="1024" height="32" alt="image" src="https://github.com/user-attachments/assets/b590c57f-9c31-4d41-89a9-074a54cfb41b" /> |  
 
-使用自定义的 RenderFeature 和 RenderPass，传入这张 LUT 对最终画面进行处理。  
-**（补充图片）**
+使用自定义的 RenderFeature 和 RenderPass，传入这张 LUT 对最终画面进行处理。
+- 使用 LUT 前后对比
+
+https://github.com/user-attachments/assets/aafe6c89-0a9b-49e6-b72d-01bb9e9204ec
 
 ## 后续计划迭代  
 ### Bloom  
@@ -611,7 +629,6 @@ GF2 的后效 Bloom 使用**降采样再升采样**的方案实现。
 
 ### TAA 抗锯齿
 GF2 使用 TAA 抗锯齿，完美适配项目原生使用的延迟渲染管线。截帧中，每个光照物体在输出 GBuffer 时都附带输出了 Motion Vector 信息，供后续的 TAA 后处理计算。  
-**（补充图片）**
 
 ### 角色高精度阴影  
 GF2 为角色单独渲染一张高分辨率 ShadowMap。相比全场景 ShadowMap，角色获得更高的阴影精度而不浪费分辨率在场景大面积区域上。  
