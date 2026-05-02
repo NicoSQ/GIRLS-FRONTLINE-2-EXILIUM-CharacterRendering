@@ -4,9 +4,13 @@ GF2 原生使用**延迟管线**渲染。项目目的在于快速复刻角色渲
 
 ## 最终效果
 全身展示  
+
 https://github.com/user-attachments/assets/d50efe4b-e775-4880-80aa-fc6e88a6d545  
+
 上半身细节展示  
-https://github.com/user-attachments/assets/7f8ffba2-ee6c-4588-be68-8ed0e485272c
+
+https://github.com/user-attachments/assets/7f8ffba2-ee6c-4588-be68-8ed0e485272c  
+
 
 ## 方案总结
 GF2 的角色渲染核心思路是 **PBR + NPR 结合**。部分材质在保留物理正确的光照基础上，通过 Ramp 贴图、SDF 阴影等手段对视觉表现进行卡通化改造，兼顾质感真实与二次元风格。
