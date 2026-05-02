@@ -119,8 +119,7 @@ float4 rampSpec = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, rampSpecUV);
 specular = D_thin * G_thin * F_schlick * rampSpec.rgb;
 
 // 避免 NPR 计算高光亮度过曝
-specular = max(specular, 0.0);                            
-specular = min(specular, 10.0);
+specular = clamp(0.0, 10.0, specular);
 // 输出直接光高光                        
 specular = F0 * specular;
 ```
@@ -164,74 +163,73 @@ float3 ambientDiffuse = diffuse * shFinal;
 
 ### 丝袜  
 **丝袜材质**使用的贴图和**衣服材质**相同。在**衣服材质**的 PBR 计算基础上添加了**基于视角变化的直接光漫反射 + 各项异性高光**，其余阶段（环境漫反射、直接光漫反射、环境高光 IBL）与衣服材质完全一致。
-1. **基于视角变化的直接光漫反射**：漫反射颜色会随视角变化。在 F0 计算阶段引入视角依赖的颜色偏移。
+1. **基于视角变化的直接光漫反射**：漫反射颜色会随视角变化。在 diffuse 计算阶段引入视角依赖的颜色偏移。
 2. **各项异性高光（替代传统 GGX 各向同性高光）**：使用各向异性变体的 NDF，**产生沿法线方向拉伸的线状高光，视觉上呈现丝袜、毛发材质特有的细长高光条纹**。其中，G 项和 F 项与标准 GGX 相同。
 ```hlsl
-float a2  = a * a;
-float sinT2 = 1.0 - NdotH * NdotH;
-float denom = NdotH * a2;
-denom  = denom * denom + sinT2;
-float  D_iso = (a2 / denom);
-D_iso  = D_iso * D_iso;
-D_iso = min(D_iso, 2048.0);
+// diffuse 跟衣服一样，相比于 Unity 少乘 0.96
+float3 diffuse = albedo * (1.0 - metallic);
+float3 F0 = lerp(0.04 , albedo, metallic);
 
-float  oneMinA2 = 1.0 - a2;
-float  G_denom  = NdotV_c * (NdotL * oneMinA2 + a2)
-                  + NdotL   * (NdotV_c * oneMinA2 + a2);
-float  G_iso    = 0.5 / max(G_denom, 0.0001);
-G_iso = min(G_iso, 1.0);
+// ── 基于视角变化的直接光漫反射项视 ────────────────
+float viewGrad = pow(NdotV, _ViewGradAreaPow);
+float3 diffuseGrad = lerp(_DiffColorB.xyz, _DiffColorA.xyz, viewGrad);
+diffuse = diffuse * diffuseGrad; // diffuse × 视角色
+
+// 计算粗糙度的平方
+float roughSq = roughness * roughness;      
 
 // ── 各向异性 GGX NDF ────────────────────────────
 // 参考: Burley "Physically Based Shading at Disney" 2012
-// https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf
 float3 T_aniso = normalize(float3(input.bitangentWS.x, input.bitangentWS.y, input.bitangentWS.z));
 float3 B_aniso = normalize(cross(normalWS, T_aniso));
 float TdotH_a  = dot(T_aniso, halfDir);
 float BdotH_a  = dot(B_aniso, halfDir);
 
 // 各向异性粗糙度
-float at = max(a2 * (1.0 + _Anisotropy), 0.001);
-float ab = max(a2 * (1.0 - _Anisotropy), 0.001);
+float at = max(roughSq * (1.0 + _Anisotropy), 0.001);
+float ab = max(roughSq * (1.0 - _Anisotropy), 0.001);
 float atab = at * ab;
 float3 anisoVec = float3(TdotH_a * ab, BdotH_a * at, NdotH * atab);
-float  anisoLen2 = dot(anisoVec, anisoVec);
-float  D_aniso   = (atab / anisoLen2);
-D_aniso = D_aniso * D_aniso * (atab * 1/PI); // × 1/PI
+float anisoLen2 = dot(anisoVec, anisoVec);
+float D_aniso = (atab / anisoLen2);
+D_aniso = D_aniso * D_aniso * (atab * 1/PI); 
 
-//float D_final = hasAniso? D_aniso : D_iso;
-float D_final = D_aniso; 
-//return float4(D_aniso.rrr, 1.0);
-float G_final = G_iso; // G 各向同性近似
+// ── Smith GGX Geometry (G) ──
+// 各向异性的 G 项跟各向同性的 G 项计算一致
+float oneMinusRoughSq = 1.0 - roughness * roughness; 
+float gTermV = NdotV * oneMinusRoughSq + roughSq; 
+float gTermL = NdotL * oneMinusRoughSq + roughSq;     
+float gDenom = gTermL * NdotV;                     
+gDenom = NdotL * gTermV + gDenom;                      
+gDenom = max(gDenom, 0.0001);                          
+float G = 1.0 / gDenom;                                                                            
+G = min(G * 0.5, 1.0);
 
-// ── Fresnel-Schlick ────────────────────
-// 参考: https://en.wikipedia.org/wiki/Schlick%27s_approximation
-float oneMinusVdotH = max(1.0 - VdotH, 0.001);
-float pow5          = oneMinusVdotH * oneMinusVdotH;
-pow5 = pow5 * pow5 * oneMinusVdotH; // (1-VdotH)^5
-float fresnelMask   = saturate(F0.g * 50.0);
-float fresnel       = fresnelMask * pow5 - pow5 + 1.0;
+// ── Schlick Fresnel (F) ──
+// 各向异性的 F 项跟各向同性的 F 项计算一致
+float oneMinusVdotH = max(1.0 - VdotH, 0.001);                                 
+float pow2 = oneMinusVdotH * oneMinusVdotH;            
+float pow4 = pow2 * pow2;                               
+float pow5 = oneMinusVdotH * pow4;                       
+float F_schlick = (saturate(F0.y * 50.0) - 1) * pow5 + 1.0;
 
-// ── 高光项 ─────────────────────────────
-float3 specTerm;
-if (enableRampMap)
-{
-// Ramp 高光: GGX 强度 → Ramp 查表 (V=0.375 行)
-float rampNDF = min(a2 / (a2 * a2), 2048.0);
-float G_ramp  = min(G_iso, 1.0);
-float specRaw = G_final * D_final;
-float rampDriveSpec = saturate((1.0 / rampNDF) * specRaw * (1.0 / max(G_ramp, 0.0001)));
-//float rampDriveSpec = saturate((1.0 / rampNDF) * specRaw * (1.0 / max(G_ramp, 0.0001)));
-//                    = saturate(D_final × G_final / (rampNDF × G_ramp))
-//                    ≈ saturate(D_final / rampNDF)   (G 约抵消)
-//                    = D_final × a² → 0~1 的 Ramp UV
-float4 rampSpecS = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(rampDriveSpec, 0.375));
-specTerm = rampNDF * rampSpecS.xyz * G_ramp * fresnel;
-}
-else
-{
-specTerm = fresnel * (D_final * G_final);
-}
-specTerm = clamp(specTerm, 0.0, 10.0);
+// ── 计算 Ramp 高光项 ─────────────────────────────
+float3 specular;
+
+// Ramp 高光，V=0.375 行
+float rampNDF = min(1 / roughSq, 2048.0);
+float G_ramp  = min(G, 1.0);
+// 计算采样高光 RampUV 的 X 分量
+// rampSpecU 实际化简后约等于 saturate(D_aniso / roughSq)，基本上结果都大于 1（数值最终被 saturate 钳制到 1）
+// roughSq 不是 D_aniso 峰值的数值，采用这个数值作为平滑基底，猜测原因是为了让 Ramp 图的过渡效果在不同的 roughness/anisotropy 下保持视觉一致性，美术画一张 Ramp，所有材质参数下的高光边缘过渡基本一致，而不至于剧烈变化
+float rampSpecU = saturate(D_aniso × G / (rampNDF × G_ramp));
+float4 rampSpec = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(rampSpecU, 0.375));
+specular = rampNDF * G_ramp * F_schlick * rampSpec.xyz;
+
+specular = clamp(specular, 0.0, 10.0);
+// 输出直接光高光                        
+specular = F0 * specular;
+
 ```
 **（补充图片）**  
 
@@ -240,12 +238,103 @@ GF2 脸部渲染采用 NPR 的 SDF 贴图方案。使用贴图如下：
 | 基础色贴图 | SDF贴图(R->阴影 G B->鼻尖、唇边高光) | Ramp贴图 |
 |------|------|------|
 | <img width="256" height="256" alt="c_CheetaSR01_slg_face_d" src="https://github.com/user-attachments/assets/38a46ee5-536c-4026-9f6b-96a567b2c180" /> | <img width="256" height="256" alt="A_face_b" src="https://github.com/user-attachments/assets/4d3f98ec-7e79-4410-9d23-908d10170c86" /> | <img width="256" height="16" alt="RampMap_Linear_RGBAHalf" src="https://github.com/user-attachments/assets/78df5018-388b-48a6-9306-91c3b37d9a90" /> |  
-1. **脸部 SDF 阴影**：由 SDF 贴图的 R 通道存储的面部阴影阈值控制，配合 Ramp 贴图实现亮暗面可控的面部明暗过渡。
+1. **脸部 SDF 阴影**：
+- 由 SDF 贴图的 R 通道存储的面部阴影阈值控制，配合 Ramp 贴图实现亮暗面可控的面部明暗过渡。
+- 核心是做了一次 Wrap-Around Frac 映射，简单来说就是光照角度 u 的数值将在 [0,2] 的数值之间循环，并与每个像素的 SDF 数值进行比较` u < sdf ? 1.0 : 0.0 `，需要处理边界问题（2 和 0 位置是相同的）。
+- 同时在光照角度 u 左右各偏移半个 penumbra 的单位做 saturate 的线性过渡，最后再用 min/max 合并，得到软边缘阴影。
+```hlsl
+// 环形 mod 2：将任意值映射到 [0, 2)
+float WrapMod2(float x)
+{
+    return 2.0 * frac(x * 0.5 + 2.0); // +2 保证输入为正
+}
+
+// 计算 SDF 阴影
+float4 ComputeFaceSDF(
+    float2 faceLightDir2D,      // 已 normalize 的 2D 光方向 (x=左右, z→y=前后)
+    float  yFactor,             // (1-|faceLightDir2D.z|) * 0.5 + 0.5
+    float  mainShadow,          // 阴影
+    float4 sdf1,                // 采样 SDF 贴图结果
+    float4 sdf2,                // 采样翻转后的 SDF 贴图结果
+    float  penumbra             // 半影宽度
+)
+{
+    float sdf1_x = sdf1.r;   
+    float sdf2_x = sdf2.r;   // flipped R
+    float alpha  = sdf1.a;
+
+    // 区分是否是正脸
+    bool isSideFace = (alpha < 0.5);
+
+    float baseU;
+    float mainTh, backTh;   
+
+    if (isSideFace)
+    {
+        // 侧脸
+        baseU  = faceLightDir2D.y * 0.5 + 0.5;   
+        mainTh = sdf2_x;   // flipped R
+        backTh = sdf1_x;   // normal R
+    }
+    else
+    {
+        // 正脸
+        baseU  = faceLightDir2D.y * 0.5 + 1.5;   
+        mainTh = sdf1_x;   // normal R
+        backTh = sdf2_x;   // flipped R
+    }
+
+    bool bFlip = (faceLightDir2D.x < 0.0);
+    float u = bFlip ? (2.0 - baseU) : baseU;
+
+    // ── WrapMod2 计算两个探测点 ──
+    // 四种情况：
+    // wr1 < 1 且 wr2 < 1
+    // wr1 > 1 且 wr2 > 1
+    // wr1 < 1 且 wr2 > 1
+    // wr1 > 1 且 wr2 < 1
+    float halfPen = penumbra * 0.5;
+    float wr1 = WrapMod2(u - halfPen);    // 左探测
+    float wr2 = WrapMod2(u + halfPen);    // 右探测
+
+    // ── 从 wr1 计算 valA 和 valB ──
+    float valA = saturate((mainTh - wr1) / penumbra);
+    float valB = 1.0 - saturate((2.0 - wr1 - backTh) / penumbra);
+
+    bool bWR1 = (wr1 < 1.0);
+    float result1 = bWR1 ? valA : valB;
+
+    // ── 从 wr2 计算 valC ──
+    float valC = 1.0 - saturate((wr2 - mainTh) / penumbra);
+
+    bool bWR2 = (wr2 < 1.0);
+    float faceSDF = bWR2 ? min(result1, valC) : max(result1, valB);
+
+    // ── 合成直射光强度 ──
+    float directIntensity = faceSDF * mainShadow * yFactor;
+
+    return float4(directIntensity, directIntensity, faceSDF, faceLightDir2D.y * 0.5 + 0.5);
+    // .xy = directIntensity (用于 Ramp 调制)
+    // .z  = 纯 faceSDF (用于高光乘算)
+    // .w  = 高光修正
+}
+
+......
+
+float4 sdf1 = SAMPLE_TEXTURE2D(_SDFMap, sampler_SDFMap, sdfUV);
+float4 sdf2 = SAMPLE_TEXTURE2D(_SDFMap, sampler_SDFMap, float2(1.0 - sdfUV.x, sdfUV.y));
+
+float3x3 worldToLocal = UNITY_MATRIX_I_M;
+// 投影到面部局部空间 2D
+float3 localDir = mul(worldToLocal, lightDirWS);
+float len = max(dot(localDir, localDir), 0.0001);
+len = rsqrt(len);
+float2 faceLightDir2D = localDir.xz * len;  // 取 XZ 分量作为面部 2D 方向
+// Y 分量映射: (1 - |z|) * 0.5 + 0.5
+float yFactor = (1.0 - abs(faceLightDir2D.y)) * 0.5 + 0.5;                              
+```
 2. **脸部高光**：SDF 贴图的 G、B 通道控制鼻尖和唇角高光。
 3. **环境光（漫反射、高光）**：跟衣服计算基本一致。
-```hlsl
-
-```
 
 **（补充图片）**  
 
