@@ -619,21 +619,20 @@ https://github.com/user-attachments/assets/aafe6c89-0a9b-49e6-b72d-01bb9e9204ec
 
 ## 后续计划迭代  
 ### Bloom  
-GF2 的后效 Bloom 使用**降采样再升采样**的方案实现。
+GF2 的后效 Bloom 使用**降采样再升采样**的方案实现（本方案展示效果为 Unity 原生 URP 的 Bloom 计算效果，效果比 GF2 的泛光效果整体更强更平均一些）
 1. **预处理**：基于亮度阈值提取屏幕需要发光的像素。
 2. **降采样**：对提取发光像素的画面进行逐级分辨率缩小的模糊处理（每级 1/2，最低缩小到原图 1/32），扩大发光扩散范围。
 3. **升采样**：从最小级开始，逐步将低频模糊信息和高频模糊信息合并，根据权重混合各级模糊效果（最高升采样到原图 1/4）。
 4. **叠加Bloom**：最后用升采样回来的低频Bloom和直接降采样1/2得到的高频Bloom结果相加，叠加到原始屏幕上。
-
-**（补充图片）**
 
 ### TAA 抗锯齿
 GF2 使用 TAA 抗锯齿，完美适配项目原生使用的延迟渲染管线。截帧中，每个光照物体在输出 GBuffer 时都附带输出了 Motion Vector 信息，供后续的 TAA 后处理计算。  
 
 ### 角色高精度阴影  
 GF2 为角色单独渲染一张高分辨率 ShadowMap。相比全场景 ShadowMap，角色获得更高的阴影精度而不浪费分辨率在场景大面积区域上。  
-**（补充图片）**
+<img width="350" height="350" alt="image" src="https://github.com/user-attachments/assets/6acd8c1b-1a84-4961-9d95-3126022341d8" />
 
 ### GTAO 屏幕环境光遮蔽  
 GF2 的角色展示界面计算了基于屏幕的环境光遮蔽，给角色增强了更多细节和立体感。  
-**（补充图片）**
+<img width="610" height="341.5" alt="image" src="https://github.com/user-attachments/assets/a9e51028-f6b3-4668-8748-1434db0cf3b6" />
+
