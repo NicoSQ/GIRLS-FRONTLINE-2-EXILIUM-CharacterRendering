@@ -331,7 +331,18 @@ float len = max(dot(localDir, localDir), 0.0001);
 len = rsqrt(len);
 float2 faceLightDir2D = localDir.xz * len;  // 取 XZ 分量作为面部 2D 方向
 // Y 分量映射: (1 - |z|) * 0.5 + 0.5
-float yFactor = (1.0 - abs(faceLightDir2D.y)) * 0.5 + 0.5;                              
+float yFactor = (1.0 - abs(faceLightDir2D.y)) * 0.5 + 0.5;
+
+// 面部 SDF 阴影 + 直射光
+float4 directResult = ComputeFaceSDF(
+    faceLightDir2D,       
+    yFactor,            
+    mainShadow,         
+    sdf1,               
+    sdf2,               
+    _PenumbraWidth      
+);
+                                
 ```
 2. **脸部高光**：SDF 贴图的 G、B 通道控制鼻尖和唇角高光。
 3. **环境光（漫反射、高光）**：跟衣服计算基本一致。
