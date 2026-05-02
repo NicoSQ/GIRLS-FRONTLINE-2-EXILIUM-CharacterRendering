@@ -155,7 +155,7 @@ float3 ambientDiffuse = diffuse * shFinal;
 **（补充图片）**  
 
 4. **环境高光 IBL**：
-- 在 PBR 的 Split-Sum 近似 中，IBL 高光被拆成两项：`IblColor = IblSample（预过滤的环境贴图） x envBRDF（环境BRDF）` 。
+- 在 PBR 的 Split-Sum 近似中，IBL 高光被拆成两项：`IblColor = IblSample（预过滤的环境贴图） x envBRDF（环境BRDF）` 。
 - 传统计算 Schlick-Karis envBRDF 拟合，标准做法需要计算一张 2D BRDF LUT，这里直接用数学多项式拟合。
 - NPR处理：用物体空间的方向信息判断暗面位置，用 `envBRDF_scale（提供菲涅尔强度）x NdotFR（偏离光照方向的程度）` 当作采样 Ramp 的 UV 的 X 分量。
 - 视觉效果上：在法线朝向背光侧，越靠近掠射角（NdotV = 0）处，环境高光 IBL 越强。
