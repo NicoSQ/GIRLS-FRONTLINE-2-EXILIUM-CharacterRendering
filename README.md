@@ -3,8 +3,8 @@
 GF2 原生使用**延迟管线**渲染。项目目的在于快速复刻角色渲染效果，使用 Unity 的前向管线进行还原。
 
 ## 最终效果
-全身展示
-
+全身展示  
+https://github.com/user-attachments/assets/d50efe4b-e775-4880-80aa-fc6e88a6d545
 上半身细节展示
 
 ## 方案总结
