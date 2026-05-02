@@ -154,11 +154,66 @@ float3 ambientDiffuse = diffuse * shFinal;
   
 **（补充图片）**  
 
-4. **环境高光 IBL（Ramp 菲涅尔）**：
-- 核心创新：用物体空间的方向信息判断暗面位置，让菲涅尔边光只出现在背光侧
-- Ramp 贴图控制边光的形态和过渡
-- 与 Unity 原生 IBL 的区别：Unity 菲涅尔全方向均匀，GF2 有选择性地增强背光侧的边光
+4. **环境高光 IBL**：
+- 在 PBR 的 Split-Sum 近似 中，IBL 高光被拆成两项：`IblColor = IblSample（预过滤的环境贴图） x envBRDF（环境BRDF）` 。
+- 传统计算 Schlick-Karis envBRDF 拟合，标准做法需要计算一张 2D BRDF LUT，这里直接用数学多项式拟合。
+- NPR处理：用物体空间的方向信息判断暗面位置，用 `envBRDF_scale（提供菲涅尔强度）x NdotFR（偏离光照方向的程度）` 当作采样 Ramp 的 UV 的 X 分量。
+- 视觉效果上：在法线朝向背光侧，越靠近掠射角（NdotV = 0）处，环境高光 IBL 越强。
+```hlsl
+// ── 计算Schlick-Karis envBRDF 拟合 ──────────────────────
+float4 envCoef;
+envCoef = roughness * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
+float envA = envCoef.x * envCoef.x;
+float expTerm = NdotV * (-9.28);
+expTerm = exp2(expTerm * 1.442695);
+envA = min(envA, expTerm);
+envA = envA * envCoef.x + envCoef.y;
+// envBRDF scale/bias
+float envBRDF_scale = envA * 1.04 + envCoef.w;
+float envBRDF_bias  = envA * (-1.04) + envCoef.z;
 
+// 面部局部空间 X 投影 (使用主光方向)
+float3 objectRight = unity_ObjectToWorld[0].xyz;
+float faceLightX = dot(mainLightDirection, normalize(objectRight));
+
+// sign 计算
+bool posTest = (faceLightX > 0.0);
+bool negTest = (faceLightX < 0.0);
+int iSign = (int)negTest - (int)posTest;
+float fSign = (float)iSign;
+float3 faceRight = fSign * objectRight;
+faceRight = normalize(faceRight);
+
+// faceRight 始终指向光源的反方向。效果直觉：当光从左边照来，faceRight 翻转到右边，NdotFR 越偏离光照方向数值越接近 1
+float NdotFR = saturate(dot(normalWS, faceRight));
+
+// Ramp Fresnel 采样 (V=0.625)
+float rampFresnelU = envBRDF_scale * NdotFR;
+float2 rampFresnelUV = float2(rampFresnelU, 0.625);
+float4 rampFresnel = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, rampFresnelUV);
+
+// 更新 envBRDF_scale
+envBRDF_scale = rampFresnel.x;
+float3 envBRDF = F0 * envBRDF_bias + envBRDF_scale;
+
+// IBL 环境反射贴图（对应 Unity 内置的 GlossyEnvironmentReflection 函数）
+float roughnessLOD = roughness * 6.0;
+float4 iblSample = SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflDir, roughnessLOD);
+float3 iblColor = DecodeHDREnvironment(iblSample, unity_SpecCube0_HDR);
+
+// 输出最终环境光 IBL
+iblColor = iblColor * envBRDF;
+```
+
+**（补充图片）**  
+
+5. **最终颜色合成**：直接光漫反射 + 直接光高光反射 + 环境光漫反射 + 环境光 IBL + （额外光源直接光漫反射 + 额外光源直接光高光）
+```hlsl
+// 直接光漫反射 + 直接光高光 + 环境漫反射 + 环境光 IBL 
+float3 finalColor = (directDiffuse * (diffuse + specular)) * mainLightColor.rgb + ambientDiffuse * occlusion + iblColor;
+```
+
+**（补充图片）**  
 
 
 ### 丝袜  
