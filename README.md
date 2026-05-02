@@ -344,7 +344,32 @@ float4 directResult = ComputeFaceSDF(
 );
                                 
 ```
-2. **脸部高光**：SDF 贴图的 G、B 通道控制鼻尖和唇角高光。
+2. **脸部高光**：SDF 贴图的 G、B 通道共同控制鼻尖和唇角高光，用平滑一些的光照方向 u 跟 SDF 的 G、B 通道进行阈值对比。
+```hlsl
+// specuUV = input.uv.xy
+float specV_offset = specUV.y - viewDirWS.y * _SpecUVYOffset;
+float3 specLocal = mul(worldToLocal, lightDirWS);
+float2 specXZ = normalize(specLocal).xz;
+                
+bool specFlip = (specXZ.x < 0.0);
+float specFlipU = 1.0 - specUV.x;
+float specU_final = specFlip ? specFlipU : specUV.x;
+
+// SDF 高光遮罩采样
+float4 specSDF = SAMPLE_TEXTURE2D(_SDFMap, sampler_SDFMap, float2(specU_final, specV_offset));
+
+// specXZ.y 可以进行进一步缩放处理控制高光边缘，这里简化处理
+float maskA = (specSDF.z >= specXZ.y) ? 1.0 : 0.0;
+float invThresh = 1.0 - specXZ.y;
+float maskB = (specSDF.y >= invThresh) ? 1.0 : 0.0;
+float specMask = maskA * maskB;
+
+// 输出高光区域（阴影区遮蔽）
+faceSpec = faceSpec * faceSDF;  
+```
+
+**（补充图片）**
+
 3. **环境光（漫反射、高光）**：跟衣服计算基本一致。
 
 **（补充图片）**  
