@@ -137,9 +137,9 @@ specular = F0 * specular;
 - **效果**：保留了 GGX 物理正确的高光形状，结合 Ramp 将物理高光"翻译"成美术可控的色阶过渡。
 
 <p align="center">
-<img width="457" height="253" alt="DirectSpecular" src="https://github.com/user-attachments/assets/c038221d-4fa0-408c-89f2-fd91d2320c8d" />
+<img width="457" height="253" alt="DirectSpecular" src="https://github.com/user-attachments/assets/c038221d-4fa0-408c-89f2-fd91d2320c8d" />  
+肩带，领带高光明显，GIF 录制有压缩
 </p>
-<p align="center"> 肩带，领带高光明显，GIF 录制有压缩 </p>
 
 3. **环境漫反射**：使用 Unity SampleSH 采样球谐光照，加入 NormalizeSH 归一化处理。**目的在于把SH环境光的方向性去掉，只保留整体的平均亮度和色调**。
 ```hlsl
@@ -167,9 +167,9 @@ float3 ambientDiffuse = diffuse * shFinal;
 ```
 <p align="center">
 <img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/7b46ff7e-19c3-492e-b510-f8f8382d1c10" />
-<img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/a4b2dd07-9aad-4043-b148-05f7f94b9550" />
+<img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/a4b2dd07-9aad-4043-b148-05f7f94b9550" />  
+调节 Lighting 的 Environment Lighting 的 Ambient Color 得到不同环境光漫反射强度
 </p>
-<p align="center"> 调节 Lighting 的 Environment Lighting 的 Ambient Color 得到不同环境光漫反射强度 </p>
 
 4. **环境高光 IBL**：
 - 在 PBR 的 Split-Sum 近似中，IBL 高光被拆成两项：`IblColor = IblSample（预过滤的环境贴图） x envBRDF（环境BRDF）` 。
@@ -221,11 +221,14 @@ float3 iblColor = DecodeHDREnvironment(iblSample, unity_SpecCube0_HDR);
 // 输出最终环境光 IBL
 iblColor = iblColor * envBRDF;
 ```
+<p align="center">
+<img width="333" height="304" alt="image" src="https://github.com/user-attachments/assets/22b492af-65fa-4ca7-86f8-abeabd58ee2a" />  
+环境反射贴图来源
+</p>
 
-| 环境反射贴图来源 |
-| ---------------- |
-| <img width="333" height="304" alt="image" src="https://github.com/user-attachments/assets/22b492af-65fa-4ca7-86f8-abeabd58ee2a" /> |
+https://github.com/user-attachments/assets/6e11a92f-7325-4d19-a0b3-eff16b910eae  
 
+<p align="center"> 衣服边缘，布偶熊玩偶边缘，裙子边缘比较明显随光照方向变化的环境光 IBL </p>
 
 5. **最终颜色合成**：直接光漫反射 + 直接光高光反射 + 环境光漫反射 + 环境光 IBL + （额外光源直接光漫反射 + 额外光源直接光高光）
 ```hlsl
@@ -303,7 +306,7 @@ specular = clamp(specular, 0.0, 10.0);
 specular = F0 * specular;
 
 ```
-**（补充图片）**  
+
 
 ### 脸  
 GF2 脸部渲染采用 NPR 的 SDF 贴图方案。使用贴图如下：
