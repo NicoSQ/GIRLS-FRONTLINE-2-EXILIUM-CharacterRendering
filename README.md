@@ -1,7 +1,10 @@
 ## 简介
 记录一下基于 Renderdoc 截帧学习少女前线2角色卡通渲染，拆解材质系统和光照模型，并在 Unity 中进行效果还原。  
-GF2 原生使用**延迟管线**渲染。项目目的在于快速复刻角色渲染效果，使用 Unity 的前向管线进行还原。  
+GF2 原生使用**延迟管线**渲染。项目目的在于快速复刻角色渲染效果，使用 Unity 的前向管线进行还原。
+
+<p align="center">
 <img width="3840" height="2160" alt="展示" src="https://github.com/user-attachments/assets/63d31da8-1008-42d6-9399-4f28512dc46a" />
+</p>
 
 ## 最终效果
 全身展示  
@@ -63,7 +66,9 @@ float2 rampDiffUV = float2(diffLumClamped, 0.125);
 float4 rampDiff = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, rampDiffUV);
 directDiffuse = rampDiff.rgb;
 ```
-**（补充图片）**  
+<p align="center">
+<img width="457" height="253" alt="RampDirectDiffuse" src="https://github.com/user-attachments/assets/19f282ee-f737-4f53-b916-13da6a9caf03" />
+</p>
 
 2. **直接光高光（GGX BRDF + Ramp 调制）**：  
 - 先计算标准 GGX BRDF 三要素：**NDF（法线分布函数）、Smith G（几何遮蔽函数）、Fresnel（菲涅尔）**。
@@ -131,7 +136,10 @@ specular = F0 * specular;
 ```
 - **效果**：保留了 GGX 物理正确的高光形状，结合 Ramp 将物理高光"翻译"成美术可控的色阶过渡。
 
-**（补充图片）**
+<p align="center">
+<img width="457" height="253" alt="DirectSpecular" src="https://github.com/user-attachments/assets/c038221d-4fa0-408c-89f2-fd91d2320c8d" />
+</p>
+<p align="center"> 肩带，领带高光明显，GIF 录制有压缩 </p>
 
 3. **环境漫反射**：使用 Unity SampleSH 采样球谐光照，加入 NormalizeSH 归一化处理。**目的在于把SH环境光的方向性去掉，只保留整体的平均亮度和色调**。
 ```hlsl
@@ -157,8 +165,11 @@ float3 shFinal = NormalizeSH(shRaw);
 // 环境漫反射 = diffuse * shFinal
 float3 ambientDiffuse = diffuse * shFinal;
 ```
-  
-**（补充图片）**  
+<p align="center">
+<img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/7b46ff7e-19c3-492e-b510-f8f8382d1c10" />
+<img width="45%" height="518" alt="image" src="https://github.com/user-attachments/assets/a4b2dd07-9aad-4043-b148-05f7f94b9550" />
+</p>
+<p align="center"> 调节 Lighting 的 Environment Lighting 的 Ambient Color 得到不同环境光漫反射强度 </p>
 
 4. **环境高光 IBL**：
 - 在 PBR 的 Split-Sum 近似中，IBL 高光被拆成两项：`IblColor = IblSample（预过滤的环境贴图） x envBRDF（环境BRDF）` 。
@@ -211,16 +222,16 @@ float3 iblColor = DecodeHDREnvironment(iblSample, unity_SpecCube0_HDR);
 iblColor = iblColor * envBRDF;
 ```
 
-**（补充图片）**  
+| 环境反射贴图来源 |
+| ---------------- |
+| <img width="333" height="304" alt="image" src="https://github.com/user-attachments/assets/22b492af-65fa-4ca7-86f8-abeabd58ee2a" /> |
+
 
 5. **最终颜色合成**：直接光漫反射 + 直接光高光反射 + 环境光漫反射 + 环境光 IBL + （额外光源直接光漫反射 + 额外光源直接光高光）
 ```hlsl
 // 直接光漫反射 + 直接光高光 + 环境漫反射 + 环境光 IBL 
 float3 finalColor = (directDiffuse * (diffuse + specular)) * mainLightColor.rgb + ambientDiffuse * occlusion + iblColor;
 ```
-
-**（补充图片）**  
-
 
 ### 丝袜  
 **丝袜材质**使用的贴图和**衣服材质**相同。在**衣服材质**的 PBR 计算基础上添加了**基于视角变化的直接光漫反射 + 各项异性高光**，其余阶段（环境漫反射、直接光漫反射、环境高光 IBL）与衣服材质完全一致。
