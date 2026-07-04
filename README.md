@@ -222,8 +222,8 @@ iblColor = iblColor * envBRDF;
 ```
 <p align="center">
 <img width="333" height="304" alt="image" src="https://github.com/user-attachments/assets/22b492af-65fa-4ca7-86f8-abeabd58ee2a" />  
-环境反射贴图来源
 </p>
+<p align="center">环境反射贴图来源</p>  
 
 https://github.com/user-attachments/assets/6e11a92f-7325-4d19-a0b3-eff16b910eae  
 
