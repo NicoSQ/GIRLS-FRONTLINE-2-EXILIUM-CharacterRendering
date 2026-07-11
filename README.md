@@ -181,7 +181,7 @@ float4 envCoef;
 envCoef = roughness * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
 float envA = envCoef.x * envCoef.x;
 float expTerm = NdotV * (-9.28);
-expTerm = exp2(expTerm * 1.442695);
+expTerm = exp2(expTerm);
 envA = min(envA, expTerm);
 envA = envA * envCoef.x + envCoef.y;
 // envBRDF scale/bias
