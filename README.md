@@ -577,7 +577,7 @@ https://github.com/user-attachments/assets/aa391f04-b733-45f9-b706-f1a7442afaca
 ### 描边  
 描边使用基于法线外扩的经典描边方案，配合一些计算实现效果优化。  
 - **平滑法线**：顶点色 RGB 通道存储预计算的切线空间下平滑法线，解决硬边处法线突变导致的描边截断问题，A 通道存储描边遮罩，控制描边区域和粗细。
-- **外扩流程**：法线转换到裁剪空间下实现描边外扩，实现屏幕宽高比矫正（避免描边在宽屏上被拉伸）和透视补偿（预乘 clip.w 抵消透视除法导致的近粗远细）。
+- **外扩流程**：法线转换到裁剪空间下实现描边外扩，自动实现屏幕宽高比矫正（避免描边在宽屏上被拉伸）和透视补偿（预乘 clip.w 抵消透视除法导致的近粗远细）。
 ```hlsl
 // 模型顶点色RGB通道预存切线空间下平滑法线
 float3 vertColor = saturate(input.vertexColor.rgb) * 2.0 - 1.0;
@@ -586,10 +586,6 @@ smoothNormalOS = normalize(smoothNormalOS);
  
 float3 smoothNormalWS = TransformObjectToWorldNormal(smoothNormalOS);
 float3 csNormal = TransformWorldToHClipDir(smoothNormalWS);
- 
-float aspect = _ScreenParams.x / _ScreenParams.y;
-csNormal.x /= aspect;
-csNormal = normalize(csNormal);
  
 float outlineWidth = _OutlineWidth * input.vertexColor.w * 0.001302;
 // 预乘 clip.w 抵消透视除法导致的近粗远细
